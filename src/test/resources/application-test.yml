@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false
+
+  # 테스트에서는 실제 메일 발송을 하지 않지만, JavaMailSender 빈 생성을 위해 host만 설정
+  mail:
+    host: localhost
+    port: 3025
+
+batch:
+  sales:
+    chunk-size: 100
+    skip-limit: 50
+
+report:
+  recipient: test@example.com
+
+# 테스트 중 자동 실행되지 않도록 먼 시점의 유효한 cron 사용
+scheduler:
+  csv-import-cron: "0 0 0 1 1 *"
+  aggregation-cron: "0 0 0 1 1 *"
+  csv-import-path: /tmp
+
+logging:
+  level:
+    org.springframework.batch: INFO
