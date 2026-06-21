@@ -1,6 +1,8 @@
 .git
 .gradle
-build
+# build 디렉토리는 제외하되, 실행 jar가 있는 build/libs만 컨텍스트에 포함
+/build/*
+!/build/libs
 bin
 out
 .idea

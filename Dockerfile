@@ -1,22 +1,11 @@
-# ===== 1단계: 빌드 (JDK 17로 bootJar 생성) =====
-FROM eclipse-temurin:17-jdk AS build
-WORKDIR /app
-
-# Gradle wrapper와 빌드 스크립트를 먼저 복사해 의존성 캐시 레이어를 활용한다
-COPY gradlew settings.gradle build.gradle ./
-COPY gradle ./gradle
-RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
-
-# 소스 복사 후 테스트는 제외하고 실행 가능한 jar 생성
-COPY src ./src
-RUN ./gradlew clean bootJar -x test --no-daemon
-
-# ===== 2단계: 실행 (가벼운 JRE 이미지) =====
+# 호스트에서 빌드한 bootJar를 복사해 실행한다.
+# (사내 프록시의 SSL 인터셉트 환경에서는 컨테이너 내부 다운로드가 막히므로,
+#  네트워크에 자유로운 호스트에서 `./gradlew bootJar`로 빌드한 산출물을 사용한다.)
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# 빌드 단계에서 생성된 jar만 가져온다
-COPY --from=build /app/build/libs/*.jar app.jar
+# 사전에 `./gradlew bootJar`로 생성된 실행 가능 jar를 복사
+COPY build/libs/*.jar app.jar
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

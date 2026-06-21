@@ -56,3 +56,8 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// 실행 불가한 plain jar 생성을 비활성화해 build/libs에 실행 가능한 bootJar만 남긴다
+tasks.named('jar') {
+    enabled = false
+}

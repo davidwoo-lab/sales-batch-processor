@@ -92,19 +92,29 @@ src/main/java/com/davidlab/salesbatch/
 
 ### 사전 요구사항
 
-- Docker / Docker Compose (권장 — 가장 빠른 실행 경로)
-- 또는 직접 실행 시: Java 17+, MySQL 8.0+
+- Java 17+ (애플리케이션 빌드용)
+- Docker / Docker Compose (MySQL + 앱 실행용)
 - SMTP 계정 (이메일 발송용, 미설정 시 발송만 생략되고 배치는 정상 동작)
 
 ### 🐳 빠른 실행 (Docker Compose)
 
-별도 설치 없이 MySQL과 애플리케이션을 한 번에 기동합니다.
+호스트에서 실행 jar를 빌드한 뒤, MySQL과 애플리케이션을 한 번에 기동합니다.
 
 ```bash
 git clone https://github.com/davidwoo-lab/sales-batch-processor.git
 cd sales-batch-processor
+
+# 1) 실행 jar 빌드 (호스트에서 수행)
+./gradlew bootJar
+
+# 2) MySQL + 앱 기동
 docker compose up --build
 ```
+
+> **왜 호스트에서 빌드하나요?**
+> 사내 프록시가 SSL을 가로채는(MITM) 네트워크에서는 컨테이너 내부 JDK가 Gradle/의존성을
+> 다운로드할 때 인증서 검증에 실패합니다. 그래서 네트워크에 자유로운 호스트에서 빌드한
+> `build/libs/*.jar` 를 이미지에 복사하는 방식을 사용합니다. (`./gradlew bootJar` 선행 필요)
 
 기동 후:
 
