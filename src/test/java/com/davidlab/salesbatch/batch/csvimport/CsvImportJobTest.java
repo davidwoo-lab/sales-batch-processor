@@ -106,6 +106,27 @@ class CsvImportJobTest {
         assertThat(rawDataRepository.count()).isEqualTo(2);
     }
 
+    @Test
+    @DisplayName("적재 파일이 없으면 기존 데이터를 삭제하지 않고 Job이 실패한다 (데이터 보존)")
+    void csvImport_missingFile_preservesExistingData() throws Exception {
+        // given: 기존 6/1 데이터가 적재되어 있음
+        Path existing = tempDir.resolve("existing.csv");
+        Files.writeString(existing, """
+                order_date,store_id,product_name,quantity,unit_price,total_amount
+                2026-06-01,STORE001,COFFEE,3,4500,13500
+                """);
+        jobLauncher.run(csvImportJob, paramsForFileAndDate(existing, "2026-06-01"));
+        assertThat(rawDataRepository.count()).isEqualTo(1);
+
+        // when: 존재하지 않는 파일을 동일 targetDate로 적재 시도
+        Path missing = tempDir.resolve("does-not-exist.csv");
+        JobExecution execution = jobLauncher.run(csvImportJob, paramsForFileAndDate(missing, "2026-06-01"));
+
+        // then: Job은 실패하지만 기존 데이터는 삭제되지 않고 보존됨
+        assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(rawDataRepository.count()).isEqualTo(1);
+    }
+
     private JobParameters paramsForFile(Path csv) {
         return new JobParametersBuilder()
                 .addString("filePath", csv.toString())
