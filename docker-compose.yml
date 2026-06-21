@@ -1,0 +1,47 @@
+# 클론 후 `docker compose up` 한 번으로 MySQL + 애플리케이션을 함께 기동한다.
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: sales-batch-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sales_batch_db
+      MYSQL_USER: sales
+      MYSQL_PASSWORD: sales1234
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    # 앱이 DB 기동 완료 후에 뜨도록 헬스체크로 준비 상태를 확인한다
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  app:
+    build: .
+    container_name: sales-batch-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 컨테이너 네트워크에서는 호스트가 'mysql'(서비스명)이 된다
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/sales_batch_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: sales
+      DB_PASSWORD: sales1234
+      # 메일은 데모 기본값(미설정 시 발송만 실패하고 배치는 정상 동작)
+      MAIL_USERNAME: ${MAIL_USERNAME:-demo@example.com}
+      MAIL_APP_PASSWORD: ${MAIL_APP_PASSWORD:-changeit}
+      REPORT_RECIPIENT: ${REPORT_RECIPIENT:-manager@example.com}
+      # 샘플 CSV가 마운트되는 경로
+      CSV_IMPORT_PATH: /data/sales/import
+    ports:
+      - "8080:8080"
+    volumes:
+      # 호스트의 샘플 데이터를 컨테이너에 마운트해 바로 적재 테스트 가능
+      - ./sample-data:/data/sales/import
+
+volumes:
+  mysql-data:

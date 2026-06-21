@@ -1,0 +1,6 @@
+plugins {
+    // Java toolchain(JDK 17) 자동 탐지/다운로드 지원
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+rootProject.name = 'sales-batch-processor'

@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: sales-batch-processor
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/sales_batch_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update          # 운영에서는 validate 권장, 개발 편의상 update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  batch:
+    jdbc:
+      initialize-schema: always # Batch 메타테이블 자동 생성
+    job:
+      enabled: false            # 스케줄러로 직접 실행하므로 기동 시 자동 실행 비활성화
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_APP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# 배치 동작 설정 (대용량 대비 조정 가능)
+batch:
+  sales:
+    chunk-size: 100
+    skip-limit: 50
+
+# 결과 리포트 수신자
+report:
+  recipient: ${REPORT_RECIPIENT:manager@example.com}
+
+# 스케줄러 cron
+scheduler:
+  csv-import-cron: "0 0 1 * * *"    # 매일 새벽 1시 CSV 적재
+  aggregation-cron: "0 0 2 * * *"   # 매일 새벽 2시 집계 실행
+  csv-import-path: ${CSV_IMPORT_PATH:/data/sales/import}
+
+logging:
+  level:
+    org.springframework.batch: INFO
+    com.davidlab.salesbatch: DEBUG
