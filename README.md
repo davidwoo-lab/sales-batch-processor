@@ -26,22 +26,19 @@ CSV로 업로드된 원본 매출 데이터를 DB에 적재하고, 이를 기반
 
 ```
 [Job 1] csvImportJob
-  FileReader (CSV)
-    └── Chunk Step (Reader → Processor → Writer)
-          ├── SalesRawDataValidator (Processor)
-          └── SalesRawDataRepository (Writer)
-                └── MySQL (sales_raw_data)
+  ① purgeRawDataStep (Tasklet)        # targetDate 기존 데이터 삭제 → 재적재 멱등성 보장
+  ② csvImportStep (Chunk: Reader → Processor → Writer)
+        ├── SalesDataValidator (Processor, 검증 실패 시 skip)
+        └── SalesRawDataItemWriter (JpaItemWriter)
+              └── MySQL (sales_raw_data)
 
 [Job 2] salesAggregationJob
-  Tasklet / Chunk Step
-    ├── DailySalesAggregator
-    ├── MonthlySalesAggregator
-    └── SalesSummaryRepository (Writer)
-          └── MySQL (sales_summary_daily / sales_summary_monthly)
+  ① dailyAggregationStep (Tasklet)    # GROUP BY 집계 → sales_summary_daily upsert
+  ② monthlyAggregationStep (Tasklet)  # 월 범위 집계 → sales_summary_monthly upsert
 
-  └── JobExecutionListener
-        ├── EmailReportSender
-        └── DashboardSummaryWriter
+  └── AggregationJobListener (afterJob)
+        ├── 성공 시: DashboardSummaryService(스냅샷 저장) + EmailReportSender(요약 리포트)
+        └── 실패 시: EmailReportSender(실패 알림)
 ```
 
 ### 패키지 구조
@@ -95,51 +92,60 @@ src/main/java/com/davidlab/salesbatch/
 
 ### 사전 요구사항
 
-- Java 17+
-- MySQL 8.0+
-- SMTP 계정 (이메일 발송용)
+- Docker / Docker Compose (권장 — 가장 빠른 실행 경로)
+- 또는 직접 실행 시: Java 17+, MySQL 8.0+
+- SMTP 계정 (이메일 발송용, 미설정 시 발송만 생략되고 배치는 정상 동작)
 
-### 설정
+### 🐳 빠른 실행 (Docker Compose)
 
-```yaml
-# src/main/resources/application.yml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/sales_batch_db
-    username: your_username
-    password: your_password
-  batch:
-    jdbc:
-      initialize-schema: always   # Batch 메타테이블 자동 생성
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: your_email@gmail.com
-    password: your_app_password
-
-report:
-  recipient: manager@example.com
-
-scheduler:
-  csv-import-cron: "0 0 1 * * *"        # 매일 새벽 1시 CSV 적재
-  aggregation-cron: "0 0 2 * * *"       # 매일 새벽 2시 집계 실행
-```
-
-### 실행
+별도 설치 없이 MySQL과 애플리케이션을 한 번에 기동합니다.
 
 ```bash
-git clone https://github.com/david-lab/sales-batch-processor.git
+git clone https://github.com/davidwoo-lab/sales-batch-processor.git
 cd sales-batch-processor
+docker compose up --build
+```
+
+기동 후:
+
+- 애플리케이션: http://localhost:8080
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- MySQL: `localhost:3306` (db: `sales_batch_db` / user: `sales` / pw: `sales1234`)
+- `./sample-data` 가 컨테이너의 `/data/sales/import` 로 마운트되어 바로 적재 테스트 가능
+
+### 환경변수 설정
+
+민감 정보는 코드에 두지 않고 환경변수로 주입합니다. (`.env.example` 참고)
+
+| 환경변수 | 설명 |
+|---|---|
+| `DB_USERNAME` / `DB_PASSWORD` | DB 접속 정보 |
+| `MAIL_USERNAME` / `MAIL_APP_PASSWORD` | SMTP 계정 (Gmail은 앱 비밀번호) |
+| `REPORT_RECIPIENT` | 결과 리포트 수신자 |
+| `CSV_IMPORT_PATH` | 스케줄러가 읽을 CSV 디렉토리 (`{경로}/{yyyy-MM-dd}.csv`) |
+
+### 직접 실행 (로컬 MySQL)
+
+```bash
 ./gradlew bootRun
 ```
 
-### CSV 직접 실행 (테스트용)
+### 수동 실행 & 조회 (REST API)
 
 ```bash
-java -jar build/libs/sales-batch-processor.jar \
-  --job.name=csvImportJob \
-  --filePath=/path/to/sales_data.csv
+# 1) CSV 적재 (targetDate 지정 시 해당 일자 재적재 멱등성 보장)
+curl -X POST "http://localhost:8080/api/batch/csv-import?filePath=/data/sales/import/sales_data_sample.csv&targetDate=2026-06-01"
+
+# 2) 매출 집계 (일/월 집계 + 이메일 + 대시보드)
+curl -X POST "http://localhost:8080/api/batch/aggregation?targetDate=2026-06-01"
+
+# 3) 결과 조회
+curl "http://localhost:8080/api/sales/daily?date=2026-06-01"     # 일별 집계
+curl "http://localhost:8080/api/sales/monthly?month=2026-06"     # 월별 집계
+curl "http://localhost:8080/api/dashboard"                       # 대시보드 스냅샷(최신순)
 ```
+
+> `적재 → 집계 → 조회` 전 과정을 Swagger UI(http://localhost:8080/swagger-ui.html)에서 클릭만으로 확인할 수 있습니다.
 
 ---
 
